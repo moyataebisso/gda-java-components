@@ -12,34 +12,21 @@
 package programmingtheiot.gda.system;
 
 import java.lang.management.ManagementFactory;
-
+import com.sun.management.OperatingSystemMXBean;
 import programmingtheiot.common.ConfigConst;
 
-
-/**
- * Shell representation of class for student implementation.
- * 
- */
-public class SystemCpuUtilTask extends BaseSystemUtilTask
-{
-	// constructors
-	
-	/**
-	 * Default.
-	 * 
-	 */
-	public SystemCpuUtilTask()
-	{
-		super(ConfigConst.NOT_SET, ConfigConst.DEFAULT_TYPE_ID);
-	}
-	
-	
-	// public methods
-	
-	@Override
-	public float getTelemetryValue()
-	{
-		return 0.0f;
-	}
-	
+public class SystemCpuUtilTask extends BaseSystemUtilTask {
+    private OperatingSystemMXBean osBean;
+    
+    public SystemCpuUtilTask() {
+        super(ConfigConst.CPU_UTIL_NAME, ConfigConst.CPU_UTIL_TYPE);
+        this.osBean = ManagementFactory.getPlatformMXBean(OperatingSystemMXBean.class);
+    }
+    
+    @Override
+    public float getTelemetryValue() {
+        double cpuLoad = osBean.getProcessCpuLoad();
+        if (cpuLoad < 0.0) cpuLoad = 0.0;
+        return (float) (cpuLoad * 100.0);
+    }
 }
