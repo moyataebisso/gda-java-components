@@ -13,51 +13,41 @@ package programmingtheiot.gda.system;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
-import programmingtheiot.common.ConfigConst;
-import programmingtheiot.common.ConfigUtil;
-import programmingtheiot.common.IDataMessageListener;
-import programmingtheiot.common.ResourceNameEnum;
-import programmingtheiot.data.SystemPerformanceData;
-
-/**
- * Shell representation of class for student implementation.
- * 
- */
-public class SystemPerformanceManager
-{
-	// private var's
-	
-	
-	// constructors
-	
-	/**
-	 * Default.
-	 * 
-	 */
-	public SystemPerformanceManager()
-	{
-	}
-	
-	
-	// public methods
-	
-	public void handleTelemetry()
-	{
-	}
-	
-	public void setDataMessageListener(IDataMessageListener listener)
-	{
-	}
-	
-	public void startManager()
-	{
-	}
-	
-	public void stopManager()
-	{
-	}
-	
+public class SystemPerformanceManager {
+    private static final Logger _Logger = Logger.getLogger(SystemPerformanceManager.class.getName());
+    
+    private ScheduledExecutorService scheduler;
+    private SystemCpuUtilTask cpuUtilTask;
+    private SystemMemUtilTask memUtilTask;
+    private int pollRate = 30;
+    
+    public SystemPerformanceManager() {
+        this.cpuUtilTask = new SystemCpuUtilTask();
+        this.memUtilTask = new SystemMemUtilTask();
+        this.scheduler = Executors.newScheduledThreadPool(1);
+    }
+    
+    public void startManager() {
+        _Logger.info("Starting SystemPerformanceManager...");
+        
+        scheduler.scheduleAtFixedRate(() -> {
+            handleTelemetry();
+        }, 0, pollRate, TimeUnit.SECONDS);
+    }
+    
+    public void stopManager() {
+        _Logger.info("Stopping SystemPerformanceManager...");
+        scheduler.shutdown();
+    }
+    
+    private void handleTelemetry() {
+        float cpuUtil = cpuUtilTask.getTelemetryValue();
+        float memUtil = memUtilTask.getTelemetryValue();
+        
+        _Logger.info("CPU Utilization: " + cpuUtil + "%");
+        _Logger.info("Memory Utilization: " + memUtil + "%");
+    }
 }

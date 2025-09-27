@@ -10,7 +10,7 @@
  */
 
 package programmingtheiot.gda.app;
-
+import programmingtheiot.gda.system.SystemPerformanceManager;
 import org.apache.commons.cli.*;
 
 import programmingtheiot.common.ConfigConst;
@@ -37,7 +37,7 @@ public class GatewayDeviceApp
 	// private var's
 	
 	private String configFile = ConfigConst.DEFAULT_CONFIG_FILE_NAME;
-
+	private SystemPerformanceManager sysPerfManager;
 	// constructors
 	
 	/**
@@ -48,7 +48,7 @@ public class GatewayDeviceApp
 	public GatewayDeviceApp()
 	{
 		super();
-		
+		this.sysPerfManager = new SystemPerformanceManager();
 		_Logger.info("Initializing GDA...");
 	}
 	
@@ -149,7 +149,7 @@ public class GatewayDeviceApp
 		
 		try {
 			// TODO: Your code here
-			
+			this.sysPerfManager.startManager();
 			_Logger.info("GDA started successfully.");
 		} catch (Exception e) {
 			_Logger.log(Level.SEVERE, "Failed to start GDA. Exiting.", e);
@@ -169,7 +169,7 @@ public class GatewayDeviceApp
 		
 		try {
 			// TODO: Your code here
-			
+			this.sysPerfManager.stopManager();
 			_Logger.log(Level.INFO, "GDA stopped successfully with exit code {0}.", code);
 		} catch (Exception e) {
 			_Logger.log(Level.SEVERE, "Failed to cleanly stop GDA. Exiting.", e);
