@@ -2,11 +2,6 @@
  * This class is part of the Programming the Internet of Things
  * project, and is available via the MIT License, which can be
  * found in the LICENSE file at the top level of this repository.
- * 
- * You may find it more helpful to your design to adjust the
- * functionality, constants and interfaces (if there are any)
- * provided within in order to meet the needs of your specific
- * Programming the Internet of Things project.
  */
 
 package programmingtheiot.gda.connection;
@@ -31,78 +26,183 @@ import programmingtheiot.common.IDataMessageListener;
 import programmingtheiot.common.ResourceNameEnum;
 
 /**
- * Shell representation of class for student implementation.
- * 
+ * MQTT Client Connector for GDA
  */
 public class MqttClientConnector implements IPubSubClient, MqttCallbackExtended
 {
 	// static
-	
 	private static final Logger _Logger =
 		Logger.getLogger(MqttClientConnector.class.getName());
 	
 	// params
-	
+	private MqttClient mqttClient;
+	private MqttConnectOptions connOpts;
+	private MemoryPersistence persistence;
+	private String brokerAddr;
+	private String clientID;
+	private int port;
+	private int keepAlive;
+	private boolean enableEncryption;
+	private boolean enableCredentials;
+	private IDataMessageListener dataMsgListener;
+	private IConnectionListener connectionListener;
 	
 	// constructors
-	
 	/**
-	 * Default.
-	 * 
+	 * Default constructor
 	 */
 	public MqttClientConnector()
 	{
-		super();
+		this(ConfigConst.MQTT_GATEWAY_SERVICE);
 	}
 	
+	/**
+	 * Constructor with config section
+	 */
+	public MqttClientConnector(String configSectionName)
+	{
+		super();
+		initClientParameters(configSectionName);
+	}
 	
 	// public methods
 	
 	@Override
 	public boolean connectClient()
 	{
+		try {
+			if (this.mqttClient == null) {
+				this.mqttClient = new MqttClient(this.brokerAddr, this.clientID, this.persistence);
+				this.mqttClient.setCallback(this);
+			}
+			
+			if (!this.mqttClient.isConnected()) {
+				_Logger.info("MQTT client connecting to broker: " + this.brokerAddr);
+				this.mqttClient.connect(this.connOpts);
+				return true;
+			} else {
+				_Logger.warning("MQTT client already connected to broker: " + this.brokerAddr);
+			}
+		} catch (MqttException e) {
+			_Logger.log(Level.SEVERE, "Failed to connect to broker: " + this.brokerAddr, e);
+		}
 		return false;
 	}
 
 	@Override
 	public boolean disconnectClient()
 	{
+		try {
+			if (this.mqttClient != null && this.mqttClient.isConnected()) {
+				_Logger.info("Disconnecting MQTT client from broker: " + this.brokerAddr);
+				this.mqttClient.disconnect();
+				return true;
+			} else {
+				_Logger.warning("MQTT client not connected to broker: " + this.brokerAddr);
+			}
+		} catch (MqttException e) {
+			_Logger.log(Level.SEVERE, "Failed to disconnect from broker: " + this.brokerAddr, e);
+		}
 		return false;
 	}
 
 	public boolean isConnected()
 	{
-		return false;
+		return (this.mqttClient != null && this.mqttClient.isConnected());
 	}
 	
 	@Override
 	public boolean publishMessage(ResourceNameEnum topicName, String msg, int qos)
 	{
+		if (topicName == null) {
+			_Logger.warning("Resource is null. Unable to publish message.");
+			return false;
+		}
+		
+		if (msg == null || msg.length() == 0) {
+			_Logger.warning("Message is null or empty. Unable to publish message.");
+			return false;
+		}
+		
+		if (qos < 0 || qos > 2) {
+			qos = ConfigConst.DEFAULT_QOS;
+		}
+		
+		String topic = topicName.getResourceName();
+		
+		try {
+			MqttMessage mqttMsg = new MqttMessage(msg.getBytes());
+			mqttMsg.setQos(qos);
+			
+			this.mqttClient.publish(topic, mqttMsg);
+			
+			_Logger.info("Published message to topic '" + topic + "': " + msg);
+			return true;
+		} catch (Exception e) {
+			_Logger.log(Level.SEVERE, "Failed to publish message to topic: " + topic, e);
+		}
+		
 		return false;
 	}
 
 	@Override
 	public boolean subscribeToTopic(ResourceNameEnum topicName, int qos)
 	{
+		if (topicName == null) {
+			_Logger.warning("Resource is null. Unable to subscribe.");
+			return false;
+		}
+		
+		if (qos < 0 || qos > 2) {
+			qos = ConfigConst.DEFAULT_QOS;
+		}
+		
+		String topic = topicName.getResourceName();
+		
+		try {
+			this.mqttClient.subscribe(topic, qos);
+			_Logger.info("Subscribed to topic: " + topic);
+			return true;
+		} catch (Exception e) {
+			_Logger.log(Level.SEVERE, "Failed to subscribe to topic: " + topic, e);
+		}
+		
 		return false;
 	}
 
 	@Override
 	public boolean unsubscribeFromTopic(ResourceNameEnum topicName)
 	{
+		if (topicName == null) {
+			_Logger.warning("Resource is null. Unable to unsubscribe.");
+			return false;
+		}
+		
+		String topic = topicName.getResourceName();
+		
+		try {
+			this.mqttClient.unsubscribe(topic);
+			_Logger.info("Unsubscribed from topic: " + topic);
+			return true;
+		} catch (Exception e) {
+			_Logger.log(Level.SEVERE, "Failed to unsubscribe from topic: " + topic, e);
+		}
+		
 		return false;
 	}
 
 	@Override
 	public boolean setConnectionListener(IConnectionListener listener)
 	{
-		return false;
+		this.connectionListener = listener;
+		return true;
 	}
 	
 	@Override
 	public boolean setDataMessageListener(IDataMessageListener listener)
 	{
-		return false;
+		this.dataMsgListener = listener;
+		return true;
 	}
 	
 	// callbacks
@@ -110,56 +210,108 @@ public class MqttClientConnector implements IPubSubClient, MqttCallbackExtended
 	@Override
 	public void connectComplete(boolean reconnect, String serverURI)
 	{
+		_Logger.info("MQTT connection successful (is reconnect = " + reconnect + "). Broker: " + serverURI);
+		
+		if (this.connectionListener != null) {
+			this.connectionListener.onConnect();
+		}
 	}
 
 	@Override
 	public void connectionLost(Throwable t)
 	{
+		_Logger.log(Level.WARNING, "Lost connection to MQTT broker: " + this.brokerAddr, t);
+		
+		if (this.connectionListener != null) {
+			this.connectionListener.onDisconnect();
+		}
 	}
 	
 	@Override
 	public void deliveryComplete(IMqttDeliveryToken token)
 	{
+		_Logger.fine("Delivered MQTT message with ID: " + token.getMessageId());
 	}
 	
 	@Override
 	public void messageArrived(String topic, MqttMessage msg) throws Exception
 	{
+		_Logger.info("MQTT message arrived on topic: '" + topic + "'");
+		
+		if (this.dataMsgListener != null) {
+			this.dataMsgListener.handleIncomingMessage(
+				ResourceNameEnum.getEnumFromValue(topic),
+				new String(msg.getPayload())
+			);
+		}
 	}
 
 	
 	// private methods
 	
 	/**
-	 * Called by the constructor to set the MQTT client parameters to be used for the connection.
-	 * 
-	 * @param configSectionName The name of the configuration section to use for
-	 * the MQTT client configuration parameters.
+	 * Called by the constructor to set the MQTT client parameters
 	 */
 	private void initClientParameters(String configSectionName)
 	{
-		// TODO: implement this
+		ConfigUtil configUtil = ConfigUtil.getInstance();
+		
+		this.brokerAddr = configUtil.getProperty(
+			configSectionName, ConfigConst.HOST_KEY, ConfigConst.DEFAULT_HOST);
+		
+		this.port = configUtil.getInteger(
+			configSectionName, ConfigConst.PORT_KEY, ConfigConst.DEFAULT_MQTT_PORT);
+		
+		this.keepAlive = configUtil.getInteger(
+			configSectionName, ConfigConst.KEEP_ALIVE_KEY, ConfigConst.DEFAULT_KEEP_ALIVE);
+		
+		// Build full broker address
+		this.brokerAddr = "tcp://" + this.brokerAddr + ":" + this.port;
+		
+		// Generate client ID
+		this.clientID = MqttClient.generateClientId();
+		
+		// Initialize persistence and connection options
+		this.persistence = new MemoryPersistence();
+		this.connOpts = new MqttConnectOptions();
+		this.connOpts.setCleanSession(true);
+		this.connOpts.setKeepAliveInterval(this.keepAlive);
+		
+		// Check for secure connection
+		this.enableEncryption = configUtil.getBoolean(
+			configSectionName, ConfigConst.ENABLE_CRYPT_KEY);
+		
+		this.enableCredentials = configUtil.getBoolean(
+			configSectionName, ConfigConst.ENABLE_AUTH_KEY);
+		
+		if (this.enableCredentials) {
+			initCredentialConnectionParameters(configSectionName);
+		}
+		
+		if (this.enableEncryption) {
+			initSecureConnectionParameters(configSectionName);
+		}
+		
+		_Logger.info("MQTT Client ID: " + this.clientID);
+		_Logger.info("MQTT Broker: " + this.brokerAddr);
+		_Logger.info("MQTT Keep Alive: " + this.keepAlive);
 	}
 	
 	/**
-	 * Called by {@link #initClientParameters(String)} to load credentials.
-	 * 
-	 * @param configSectionName The name of the configuration section to use for
-	 * the MQTT client configuration parameters.
+	 * Initialize credential parameters
 	 */
 	private void initCredentialConnectionParameters(String configSectionName)
 	{
-		// TODO: implement this
+		// TODO: implement authentication if needed
+		_Logger.info("Credentials enabled but not yet implemented");
 	}
 	
 	/**
-	 * Called by {@link #initClientParameters(String)} to enable encryption.
-	 * 
-	 * @param configSectionName The name of the configuration section to use for
-	 * the MQTT client configuration parameters.
+	 * Initialize secure connection parameters
 	 */
 	private void initSecureConnectionParameters(String configSectionName)
 	{
-		// TODO: implement this
+		// TODO: implement TLS/SSL if needed
+		_Logger.info("Encryption enabled but not yet implemented");
 	}
 }
